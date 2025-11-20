@@ -12,6 +12,7 @@ interface UserState {
     confidence: number
     estimatedHb: number
     heatmapUrl?: string
+    image?: string // Base64 or URL
   } | null
   setName: (name: string) => void
   setAge: (age: number) => void

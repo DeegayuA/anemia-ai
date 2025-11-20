@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useUserStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { ArrowLeft, RotateCcw, Share2, Activity } from "lucide-react";
+import { RotateCcw, Share2, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function ResultPage() {
@@ -15,13 +15,14 @@ export default function ResultPage() {
 
   useEffect(() => {
     if (!scanResult) {
-      router.replace("/");
+      // Redirect to scan if no result, instead of root (which loops to name input)
+      router.replace("/scan");
     }
   }, [scanResult, router]);
 
   if (!scanResult) return null;
 
-  const { severity, estimatedHb, confidence } = scanResult;
+  const { severity, estimatedHb, confidence, image } = scanResult;
   const percentage = Math.round(confidence * 100);
   
   // Determine Color based on severity
@@ -56,7 +57,7 @@ export default function ResultPage() {
       >
         <div className="text-center space-y-2">
             <h1 className="text-2xl font-semibold text-muted-foreground">Analysis Complete</h1>
-            <h2 className="text-3xl font-bold tracking-tight text-primary">Hello, {name}</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-primary">Hello, {name || "Guest"}</h2>
         </div>
 
         <div className="glass-card p-8 space-y-8 relative overflow-hidden">
@@ -122,22 +123,32 @@ export default function ResultPage() {
                 </div>
             </div>
 
-            {/* Heatmap Overlay Placeholder */}
-            <div className="relative w-full h-32 rounded-lg overflow-hidden bg-black/50 mt-4">
-                <div className="absolute inset-0 flex items-center justify-center text-xs text-white/70">
-                    [ Grad-CAM Heatmap Visualization ]
+            {/* Heatmap Overlay / Image Display */}
+            <div className="relative w-full h-32 rounded-lg overflow-hidden bg-black/50 mt-4 group">
+                {image ? (
+                   // eslint-disable-next-line @next/next/no-img-element
+                   <img src={image} alt="Scan" className="w-full h-full object-cover opacity-80 group-hover:opacity-40 transition-opacity" />
+                ) : (
+                   <div className="absolute inset-0 flex items-center justify-center text-xs text-white/70">
+                      [ No Image Captured ]
+                   </div>
+                )}
+
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                   <span className="text-xs text-white font-bold drop-shadow-md">Captured Frame</span>
                 </div>
-                {/* Simulated Heatmap Gradient */}
-                <div className={cn("absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-transparent to-red-500/20 mix-blend-overlay", bgClass === "bg-green-500" ? "opacity-0" : "opacity-50")} />
+
+                {/* Simulated Heatmap Gradient Overlay */}
+                <div className={cn("absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-transparent to-red-500/20 mix-blend-overlay pointer-events-none", bgClass === "bg-green-500" ? "opacity-0" : "opacity-50")} />
             </div>
 
              <div className="flex gap-4 pt-4">
                 <Button
                     variant="outline"
-                    onClick={() => router.push("/")}
+                    onClick={() => router.push("/scan")}
                     className="flex-1 h-12 rounded-xl"
                 >
-                    <RotateCcw className="mr-2 h-4 w-4" /> Retry
+                    <RotateCcw className="mr-2 h-4 w-4" /> Rescan
                 </Button>
                 <Button
                     className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground"
