@@ -126,7 +126,7 @@ export default function ScanPage() {
             const start = face.topLeft as [number, number];
             const end = face.bottomRight as [number, number];
             const width = end[0] - start[0];
-            // const height = end[1] - start[1];
+            const height = end[1] - start[1];
 
             // Draw stylized corner brackets instead of full rect
             ctx.strokeStyle = "#00ff00";

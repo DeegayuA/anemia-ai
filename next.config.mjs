@@ -1,11 +1,12 @@
 /** @type {import('next').NextConfig} */
-const CopyPlugin = require("copy-webpack-plugin");
-const path = require("path");
+import CopyPlugin from "copy-webpack-plugin";
+import path from "path";
 
 const nextConfig = {
   output: "export",
   basePath: "/anemia-ai",
   assetPrefix: "/anemia-ai/",
+  turbopack: {}, // disable turbopack warning
   transpilePackages: [
     '@tensorflow/tfjs',
     '@tensorflow/tfjs-core',
@@ -23,8 +24,8 @@ const nextConfig = {
       new CopyPlugin({
         patterns: [
           {
-            from: path.join(__dirname, "node_modules/onnxruntime-web/dist/*.wasm"),
-            to: path.join(__dirname, "public/models/[name][ext]"),
+            from: path.join(process.cwd(), "node_modules/onnxruntime-web/dist/*.wasm"),
+            to: path.join(process.cwd(), "public/models/[name][ext]"),
           },
         ],
       })
@@ -34,4 +35,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
