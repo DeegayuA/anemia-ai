@@ -1,14 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { promises as fsPromises } from "fs";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { image, ...resultData } = body;
-
-    // Define paths
+    // Limit number of images stored (keep only last 10 best quality images)
+    const MAX_IMAGES = 10;
     const uploadsDir = path.join(process.cwd(), "public", "uploads");
+    
+    if (fs.existsSync(uploadsDir)) {
+      const files = fs.readdirSync(uploadsDir)
+      .filter(file => file.startsWith("scan-") && file.endsWith(".jpg"))
+      .map(file => ({
+        name: file,
+        path: path.join(uploadsDir, file),
+        time: fs.statSync(path.join(uploadsDir, file)).mtime.getTime()
+      }))
+      .sort((a, b) => b.time - a.time);
+      
+      // Delete old images if exceeding limit
+      if (files.length >= MAX_IMAGES) {
+      files.slice(MAX_IMAGES - 1).forEach(file => {
+        fs.unlinkSync(file.path);
+      });
+      }
+    }
+    // Define paths
     const dataDir = path.join(process.cwd(), "data");
     const resultsFile = path.join(dataDir, "results.json");
 
