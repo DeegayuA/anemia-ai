@@ -75,13 +75,14 @@ export default function ResultPage() {
 
   useEffect(() => {
     if (!scanResult) {
-      router.replace("/");
+      // Redirect to scan if no result, instead of root (which loops to name input)
+      router.replace("/scan");
     }
   }, [scanResult, router]);
 
   if (!scanResult) return null;
 
-  const { severity, estimatedHb, confidence } = scanResult;
+  const { severity, estimatedHb, confidence, image } = scanResult;
   const percentage = Math.round(confidence * 100);
   
   // Get config or fallback to Mild if undefined
