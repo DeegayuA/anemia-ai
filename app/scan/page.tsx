@@ -74,7 +74,19 @@ export default function ScanPage() {
         // Note: Ensure 'model.onnx' is in 'public/models/'
         // The base path is /anemia-ai based on next.config.js
         try {
-            const modelPath = `${window.location.origin}/anemia-ai/models/model.onnx`;
+            // Configure WASM paths to point to where CopyPlugin put them
+            // This is critical for ONNX Runtime Web to find the .wasm files
+            // We use a relative path or absolute path based on deployment
+            // Since files are in public/models, and base path is /anemia-ai,
+            // we should point to /anemia-ai/models/
+
+            // Detect if we are running with a base path (e.g. GitHub Pages)
+            const basePath = window.location.pathname.startsWith('/anemia-ai') ? '/anemia-ai' : '';
+            const modelsPath = `${window.location.origin}${basePath}/models/`;
+
+            ort.env.wasm.wasmPaths = modelsPath;
+
+            const modelPath = `${modelsPath}model.onnx`;
             // Configure execution provider to wasm (CPU) or webgl (GPU) if supported
             sessionRef.current = await ort.InferenceSession.create(modelPath, { executionProviders: ['wasm'] });
             console.log("ONNX Model loaded successfully");
