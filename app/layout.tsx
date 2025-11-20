@@ -17,7 +17,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link
+          rel="icon"
+          href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🩸</text></svg>"
+        />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                function setTheme() {
+                  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                }
+                setTheme();
+                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', setTheme);
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className={cn(inter.className, "bg-background text-foreground antialiased overflow-x-hidden")}>
         <PageTransition>{children}</PageTransition>
       </body>

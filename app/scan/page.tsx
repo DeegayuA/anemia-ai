@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/lib/store";
-import { motion } from "framer-motion";
-import { AlertCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { AlertCircle, Loader2 } from "lucide-react";
 
 // Dynamically import TFJS and BlazeFace
 let tf: any;
@@ -110,23 +110,52 @@ export default function ScanPage() {
             const start = face.topLeft as [number, number];
             const end = face.bottomRight as [number, number];
             const width = end[0] - start[0];
-            const height = end[1] - start[1];
+            // const height = end[1] - start[1];
 
-            // Draw bounding box
+            // Draw stylized corner brackets instead of full rect
             ctx.strokeStyle = "#00ff00";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(start[0], start[1], width, height);
+            ctx.lineWidth = 4;
+            const lineLen = 20;
+
+            // Top-Left
+            ctx.beginPath();
+            ctx.moveTo(start[0], start[1] + lineLen);
+            ctx.lineTo(start[0], start[1]);
+            ctx.lineTo(start[0] + lineLen, start[1]);
+            ctx.stroke();
+
+            // Top-Right
+            ctx.beginPath();
+            ctx.moveTo(end[0] - lineLen, start[1]);
+            ctx.lineTo(end[0], start[1]);
+            ctx.lineTo(end[0], start[1] + lineLen);
+            ctx.stroke();
+
+            // Bottom-Left
+            ctx.beginPath();
+            ctx.moveTo(start[0], end[1] - lineLen);
+            ctx.lineTo(start[0], end[1]);
+            ctx.lineTo(start[0] + lineLen, end[1]);
+            ctx.stroke();
+
+            // Bottom-Right
+            ctx.beginPath();
+            ctx.moveTo(end[0] - lineLen, end[1]);
+            ctx.lineTo(end[0], end[1]);
+            ctx.lineTo(end[0], end[1] - lineLen);
+            ctx.stroke();
             
             // Simple heuristic: face must be big enough
             if (width > 100) {
                setScanning(true);
                // Simulate "good frames" accumulation
                setProgress((prev) => {
-                 const next = prev + 2; // Increment progress
+                 const next = prev + 1; // Increment progress slower for effect
                  if (next >= 100) {
                    // Done!
                    cancelAnimationFrame(animationId);
-                   handleScanComplete();
+                   // Use setTimeout to allow the last frame to render before handling complete
+                   setTimeout(handleScanComplete, 0);
                    return 100;
                  }
                  return next;
@@ -134,12 +163,12 @@ export default function ScanPage() {
             } else {
                 setScanning(false);
                 // Reset if face too small
-                setProgress((prev) => Math.max(0, prev - 5));
+                setProgress((prev) => Math.max(0, prev - 2));
             }
 
           } else {
             setScanning(false);
-            setProgress((prev) => Math.max(0, prev - 5));
+            setProgress((prev) => Math.max(0, prev - 2));
           }
         } catch (e) {
           console.error("Detection error", e);
@@ -155,10 +184,8 @@ export default function ScanPage() {
     return () => cancelAnimationFrame(animationId);
   }, [permissionGranted, isLoadingModel, progress]);
 
-  const handleScanComplete = () => {
+  const handleScanComplete = async () => {
     // Generate Mock Hb Value between 3.1 and 15.0
-    // Weighted towards normal for realism if needed, or purely random.
-    // Let's pick a random value between 3.1 and 15.0
     const estimatedHb = parseFloat((3.1 + Math.random() * (15.0 - 3.1)).toFixed(2));
     
     let severity: 'Severe' | 'Moderate' | 'Mild' | 'Non-Anemic' = 'Non-Anemic';
@@ -180,28 +207,64 @@ export default function ScanPage() {
 
     const randomConfidence = 0.7 + Math.random() * 0.25; // 0.7 - 0.95
     
+    // Capture Image
+    let image = "";
+    if (canvasRef.current) {
+      image = canvasRef.current.toDataURL("image/jpeg", 0.8);
+    }
+
     const result = {
       anemia,
       severity,
       estimatedHb,
       confidence: randomConfidence,
+      image,
     };
 
+    // Update store
     setScanResult(result);
+
+    // Send to API (non-blocking for UX speed, but waiting here to ensure saving)
+    try {
+      await fetch("/api/save-result", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(result),
+      });
+    } catch (err) {
+      console.error("Failed to save result", err);
+    }
     
-    // Delay slightly for effect then navigate
-    setTimeout(() => {
-        router.push("/result");
-    }, 500);
+    router.push("/result");
   };
 
   return (
-    <main className="fixed inset-0 flex flex-col bg-black text-white">
+    <main className="fixed inset-0 flex flex-col bg-black text-white overflow-hidden">
+      {/* Full Screen Loader */}
+      <AnimatePresence>
+        {isLoadingModel && (
+           <motion.div
+             initial={{ opacity: 1 }}
+             exit={{ opacity: 0 }}
+             className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black"
+           >
+              <div className="relative">
+                <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                <div className="absolute inset-0 w-12 h-12 border-4 border-primary/20 rounded-full" />
+              </div>
+              <p className="mt-4 text-lg font-mono animate-pulse text-primary/80">INITIALIZING AI MODELS...</p>
+           </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Camera Layer */}
-      <div className="relative flex-1 overflow-hidden">
-        {!permissionGranted && !error && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
-            <p>Requesting camera access...</p>
+      <div className="relative flex-1 overflow-hidden bg-black">
+        {!permissionGranted && !error && !isLoadingModel && (
+          <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/80 text-center p-4">
+             <div className="flex flex-col items-center gap-4">
+                 <Loader2 className="w-8 h-8 animate-spin" />
+                 <p>Waiting for camera permission...</p>
+             </div>
           </div>
         )}
 
@@ -219,52 +282,75 @@ export default function ScanPage() {
 
         {/* Scanning Overlay */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-             {/* Mask / Overlay */}
-             <svg width="100%" height="100%" className="opacity-50">
+             {/* Darken outer area */}
+             <svg width="100%" height="100%" className="opacity-70">
                 <defs>
                    <mask id="mask">
                       <rect width="100%" height="100%" fill="white" />
-                      <rect x="50%" y="50%" width="280" height="350" rx="150" transform="translate(-140, -175)" fill="black" />
+                      {/* Cutout for face */}
+                      <rect x="50%" y="50%" width="280" height="350" rx="40" transform="translate(-140, -175)" fill="black" />
                    </mask>
                 </defs>
                 <rect width="100%" height="100%" fill="black" mask="url(#mask)" />
              </svg>
              
-             {/* Guide Frame */}
-             <div className={`w-[280px] h-[350px] rounded-[150px] border-4 transition-colors duration-300 flex items-center justify-center relative ${scanning ? 'border-green-500' : 'border-white/50'}`}>
-                 {scanning && (
-                    <motion.div 
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1.1, opacity: 0.5 }}
-                        transition={{ repeat: Infinity, duration: 1 }}
-                        className="absolute inset-0 bg-green-500/20 rounded-[150px]"
-                    />
-                 )}
+             {/* Scanner Line */}
+             {scanning && (
+               <div className="absolute w-[280px] h-[350px] overflow-hidden rounded-[40px]">
+                 <motion.div
+                    animate={{ top: ["0%", "100%", "0%"] }}
+                    transition={{ duration: 3, ease: "linear", repeat: Infinity }}
+                    className="absolute left-0 w-full h-1 bg-green-500 shadow-[0_0_20px_rgba(34,197,94,0.8)]"
+                 />
+               </div>
+             )}
+
+             {/* Guide Frame Corners */}
+             <div className="absolute w-[300px] h-[370px]">
+                <div className={`absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 rounded-tl-xl transition-colors ${scanning ? 'border-green-500' : 'border-white/50'}`} />
+                <div className={`absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 rounded-tr-xl transition-colors ${scanning ? 'border-green-500' : 'border-white/50'}`} />
+                <div className={`absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 rounded-bl-xl transition-colors ${scanning ? 'border-green-500' : 'border-white/50'}`} />
+                <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 rounded-br-xl transition-colors ${scanning ? 'border-green-500' : 'border-white/50'}`} />
              </div>
         </div>
       </div>
 
       {/* UI Layer */}
-      <div className="absolute bottom-0 w-full p-8 pb-12 bg-gradient-to-t from-black/90 to-transparent space-y-4 z-30">
-         <div className="flex justify-between items-center text-center">
+      <div className="absolute bottom-0 w-full p-6 pb-12 bg-gradient-to-t from-black via-black/80 to-transparent space-y-4 z-30">
+         <div className="max-w-md mx-auto w-full space-y-4">
             {error ? (
-              <div className="flex items-center text-red-500 mx-auto gap-2 bg-red-500/10 p-4 rounded-xl backdrop-blur-md">
+              <div className="flex items-center text-red-500 justify-center gap-2 bg-red-950/50 p-4 rounded-xl border border-red-900/50 backdrop-blur-md">
                  <AlertCircle /> {error}
               </div>
             ) : (
-              <div className="w-full space-y-2">
-                  <p className="text-lg font-medium text-center">
-                    {isLoadingModel ? "Loading AI Models..." : scanning ? "Scanning..." : "Position your face in the frame"}
+              <>
+                <div className="text-center space-y-1">
+                  <h3 className={`text-xl font-semibold tracking-wide transition-colors ${scanning ? 'text-green-400' : 'text-white'}`}>
+                    {scanning ? "ANALYZING..." : "ALIGN FACE"}
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    {scanning ? "Hold still while we scan" : "Position your face within the frame"}
                   </p>
+                </div>
                   
-                  {/* Progress Bar */}
-                  <div className="h-2 w-full bg-gray-700 rounded-full overflow-hidden">
-                     <motion.div 
-                        className="h-full bg-green-500"
-                        animate={{ width: `${progress}%` }}
-                     />
-                  </div>
-              </div>
+                {/* Techy Progress Bar */}
+                <div className="relative h-4 w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800">
+                   {/* Grid lines */}
+                   <div className="absolute inset-0 flex justify-between px-1">
+                      {[...Array(20)].map((_, i) => (
+                        <div key={i} className="w-[1px] h-full bg-gray-800/50" />
+                      ))}
+                   </div>
+                   <motion.div
+                      className="h-full bg-gradient-to-r from-green-600 to-green-400 shadow-[0_0_15px_rgba(34,197,94,0.5)]"
+                      animate={{ width: `${progress}%` }}
+                   />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 font-mono uppercase">
+                  <span>Scan Progress</span>
+                  <span>{Math.round(progress)}%</span>
+                </div>
+              </>
             )}
          </div>
       </div>
