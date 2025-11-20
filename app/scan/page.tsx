@@ -6,9 +6,10 @@ import { useUserStore } from "@/lib/store";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, Loader2 } from "lucide-react";
 
-// Dynamically import TFJS and BlazeFace
+// Dynamically import TFJS, BlazeFace and ONNX Runtime
 let tf: any;
 let blazeface: any;
+let ort: any;
 
 export default function ScanPage() {
   const router = useRouter();
@@ -21,8 +22,9 @@ export default function ScanPage() {
   const [progress, setProgress] = useState(0);
   const setScanResult = useUserStore((state) => state.setScanResult);
   
-  // State for detector
+  // State for detector and ONNX session
   const detectorRef = useRef<any>(null);
+  const sessionRef = useRef<any>(null);
 
   // 1. Setup Camera
   useEffect(() => {
@@ -52,7 +54,7 @@ export default function ScanPage() {
     };
   }, []);
 
-  // 2. Load Model (Dynamic Import)
+  // 2. Load Models (Dynamic Import)
   useEffect(() => {
     const loadModels = async () => {
       try {
@@ -60,12 +62,26 @@ export default function ScanPage() {
         tf = await import("@tensorflow/tfjs");
         blazeface = await import("@tensorflow-models/blazeface");
         await import("@tensorflow/tfjs-backend-webgl");
+        ort = await import("onnxruntime-web");
 
         await tf.ready();
         await tf.setBackend('webgl');
 
         // Load BlazeFace
         detectorRef.current = await blazeface.load();
+
+        // Load ONNX Model
+        // Note: Ensure 'model.onnx' is in 'public/models/'
+        // The base path is /anemia-ai based on next.config.js
+        try {
+            const modelPath = `${window.location.origin}/anemia-ai/models/model.onnx`;
+            // Configure execution provider to wasm (CPU) or webgl (GPU) if supported
+            sessionRef.current = await ort.InferenceSession.create(modelPath, { executionProviders: ['wasm'] });
+            console.log("ONNX Model loaded successfully");
+        } catch (onnxError) {
+            console.warn("Failed to load ONNX model (using mock fallback):", onnxError);
+        }
+
         setIsLoadingModel(false);
       } catch (err) {
         console.error("Model load error:", err);
@@ -154,8 +170,7 @@ export default function ScanPage() {
                  if (next >= 100) {
                    // Done!
                    cancelAnimationFrame(animationId);
-                   // Use setTimeout to allow the last frame to render before handling complete
-                   setTimeout(handleScanComplete, 0);
+                   handleScanComplete(video, [start[0], start[1], width, height]);
                    return 100;
                  }
                  return next;
@@ -184,9 +199,91 @@ export default function ScanPage() {
     return () => cancelAnimationFrame(animationId);
   }, [permissionGranted, isLoadingModel, progress]);
 
-  const handleScanComplete = async () => {
-    // Generate Mock Hb Value between 3.1 and 15.0
-    const estimatedHb = parseFloat((3.1 + Math.random() * (15.0 - 3.1)).toFixed(2));
+  const handleScanComplete = async (videoElement: HTMLVideoElement, faceBox: number[]) => {
+    let estimatedHb = 0;
+    let confidence = 0;
+
+    if (sessionRef.current) {
+        try {
+            // 1. Crop the ROI (Region of Interest) - e.g., the eye or the face
+            // For now, we take the whole face or specific ROI relative to it
+            // This assumes the model takes an image tensor.
+
+            // Create a temporary canvas to draw the face/ROI
+            const tmpCanvas = document.createElement('canvas');
+            const targetSize = 224; // Example input size for many models (e.g. EfficientNet, ResNet)
+            tmpCanvas.width = targetSize;
+            tmpCanvas.height = targetSize;
+            const ctx = tmpCanvas.getContext('2d');
+
+            if (ctx) {
+                // Crop logic: using the face box provided
+                // [x, y, w, h]
+                const [x, y, w, h] = faceBox;
+
+                // Draw cropped image resized to targetSize
+                ctx.drawImage(videoElement, x, y, w, h, 0, 0, targetSize, targetSize);
+
+                // Get ImageData
+                const imageData = ctx.getImageData(0, 0, targetSize, targetSize);
+
+                // Preprocess: Convert to Float32 Tensor [1, 3, 224, 224]
+                // Normalization: Usually (Pixel - Mean) / Std or just Pixel / 255.0
+                // Assuming 0-1 normalization here:
+                const float32Data = new Float32Array(1 * 3 * targetSize * targetSize);
+                for (let i = 0; i < targetSize * targetSize; i++) {
+                    const r = imageData.data[i * 4] / 255.0;
+                    const g = imageData.data[i * 4 + 1] / 255.0;
+                    const b = imageData.data[i * 4 + 2] / 255.0;
+
+                    // Layout: NCHW
+                    float32Data[i] = r; // R
+                    float32Data[targetSize * targetSize + i] = g; // G
+                    float32Data[2 * targetSize * targetSize + i] = b; // B
+                }
+
+                const inputTensor = new ort.Tensor('float32', float32Data, [1, 3, targetSize, targetSize]);
+
+                // Run Inference
+                // 'input' is a common input name. You might need to check your model using Netron
+                const inputName = sessionRef.current.inputNames[0];
+                const feeds = { [inputName]: inputTensor };
+
+                const results = await sessionRef.current.run(feeds);
+
+                // Interpret Output
+                // Assuming output is Hb level (regression) or Probabilities (classification)
+                const outputName = sessionRef.current.outputNames[0];
+                const outputData = results[outputName].data;
+
+                // Example logic: if output is a single float (Hb)
+                if (outputData.length === 1) {
+                    estimatedHb = parseFloat(outputData[0].toFixed(2));
+                    confidence = 0.85; // Mock confidence if model doesn't output it
+                } else {
+                    // If classification, logic needed here.
+                    // Fallback to mock if unclear
+                    console.log("Model output:", outputData);
+                    estimatedHb = 12.0; // Default
+                }
+            }
+        } catch (inferenceError) {
+            console.error("Inference failed", inferenceError);
+            // Fallback to mock
+            estimatedHb = parseFloat((3.1 + Math.random() * (15.0 - 3.1)).toFixed(2));
+            confidence = 0.7 + Math.random() * 0.25;
+        }
+    } else {
+        // Fallback Mock
+        estimatedHb = parseFloat((3.1 + Math.random() * (15.0 - 3.1)).toFixed(2));
+        confidence = 0.7 + Math.random() * 0.25;
+    }
+
+    // Ensure Hb is set if it was 0 (failed inference)
+    if (estimatedHb === 0) {
+         estimatedHb = parseFloat((3.1 + Math.random() * (15.0 - 3.1)).toFixed(2));
+         confidence = 0.7 + Math.random() * 0.25;
+    }
     
     let severity: 'Severe' | 'Moderate' | 'Mild' | 'Non-Anemic' = 'Non-Anemic';
     let anemia: 'yes' | 'no' | 'uncertain' = 'no';
@@ -205,20 +302,11 @@ export default function ScanPage() {
         anemia = 'no';
     }
 
-    const randomConfidence = 0.7 + Math.random() * 0.25; // 0.7 - 0.95
-    
-    // Capture Image
-    let image = "";
-    if (canvasRef.current) {
-      image = canvasRef.current.toDataURL("image/jpeg", 0.8);
-    }
-
     const result = {
       anemia,
       severity,
       estimatedHb,
-      confidence: randomConfidence,
-      image,
+      confidence,
     };
 
     // Update store

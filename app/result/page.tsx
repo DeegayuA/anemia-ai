@@ -1,17 +1,77 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import { 
+    Card, 
+    CardContent, 
+    CardDescription, 
+    CardHeader, 
+    CardTitle 
+} from "@/components/ui/card";
 import { motion } from "framer-motion";
-import { RotateCcw, Share2, Activity } from "lucide-react";
+import { 
+    ArrowLeft, 
+    RotateCcw, 
+    Share2, 
+    Activity, 
+    Info, 
+    CheckCircle2, 
+    AlertTriangle, 
+    AlertOctagon,
+    ChevronRight
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// Configuration for severity levels to keep code clean
+const SEVERITY_CONFIG = {
+    'Severe': {
+        color: "text-rose-600",
+        bg: "bg-rose-50",
+        border: "border-rose-200",
+        fill: "stroke-rose-600",
+        gradient: "from-rose-500 to-red-600",
+        icon: AlertOctagon,
+        message: "Requires immediate medical attention.",
+    },
+    'Moderate': {
+        color: "text-orange-600",
+        bg: "bg-orange-50",
+        border: "border-orange-200",
+        fill: "stroke-orange-500",
+        gradient: "from-orange-400 to-orange-600",
+        icon: AlertTriangle,
+        message: "Consult a healthcare provider soon.",
+    },
+    'Mild': {
+        color: "text-yellow-600",
+        bg: "bg-yellow-50",
+        border: "border-yellow-200",
+        fill: "stroke-yellow-500",
+        gradient: "from-yellow-400 to-yellow-600",
+        icon: Info,
+        message: "Monitor diet and consult a doctor.",
+    },
+    'Non-Anemic': {
+        color: "text-emerald-600",
+        bg: "bg-emerald-50",
+        border: "border-emerald-200",
+        fill: "stroke-emerald-500",
+        gradient: "from-emerald-400 to-emerald-600",
+        icon: CheckCircle2,
+        message: "Levels appear within normal range.",
+    }
+};
 
 export default function ResultPage() {
   const router = useRouter();
   const scanResult = useUserStore((state) => state.scanResult);
   const name = useUserStore((state) => state.name);
+  
+  // Mocking toast for share
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!scanResult) {
@@ -25,142 +85,214 @@ export default function ResultPage() {
   const { severity, estimatedHb, confidence, image } = scanResult;
   const percentage = Math.round(confidence * 100);
   
-  // Determine Color based on severity
-  let colorClass = "text-green-500";
-  let bgClass = "bg-green-500";
-  
-  switch(severity) {
-      case 'Severe':
-          colorClass = "text-red-600";
-          bgClass = "bg-red-600";
-          break;
-      case 'Moderate':
-          colorClass = "text-orange-500";
-          bgClass = "bg-orange-500";
-          break;
-      case 'Mild':
-          colorClass = "text-yellow-500";
-          bgClass = "bg-yellow-500";
-          break;
-      case 'Non-Anemic':
-          colorClass = "text-green-500";
-          bgClass = "bg-green-500";
-          break;
-  }
+  // Get config or fallback to Mild if undefined
+  const config = SEVERITY_CONFIG[severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG['Mild'];
+  const StatusIcon = config.icon;
+
+  const handleShare = () => {
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    // Add actual navigator.share logic here if needed
+  };
+
+  // Animation Variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+        opacity: 1,
+        transition: { staggerChildren: 0.15 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0 }
+  };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-6">
+    <main className="min-h-screen bg-slate-50/50 flex flex-col items-center py-10 px-4 sm:px-6">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md space-y-6"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="w-full max-w-lg space-y-6"
       >
-        <div className="text-center space-y-2">
-            <h1 className="text-2xl font-semibold text-muted-foreground">Analysis Complete</h1>
-            <h2 className="text-3xl font-bold tracking-tight text-primary">Hello, {name || "Guest"}</h2>
-        </div>
-
-        <div className="glass-card p-8 space-y-8 relative overflow-hidden">
-            {/* Background Glow */}
-            <div className={cn("absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-transparent via-current to-transparent opacity-50", colorClass)} />
-
-            <div className="flex flex-col items-center space-y-4">
-                <div className="relative w-48 h-48">
-                    {/* Animated Circular Gauge */}
-                    <svg className="w-full h-full transform -rotate-90">
-                        <circle
-                            cx="96"
-                            cy="96"
-                            r="88"
-                            stroke="currentColor"
-                            strokeWidth="12"
-                            fill="transparent"
-                            className="text-secondary"
-                        />
-                        <motion.circle
-                            cx="96"
-                            cy="96"
-                            r="88"
-                            stroke="currentColor"
-                            strokeWidth="12"
-                            fill="transparent"
-                            strokeLinecap="round"
-                            className={colorClass}
-                            initial={{ strokeDasharray: "0 552" }}
-                            animate={{ strokeDasharray: `${percentage * 5.52} 552` }}
-                            transition={{ duration: 1.5, ease: "easeOut" }}
-                        />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <motion.span 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.5 }}
-                            className="text-4xl font-bold"
-                        >
-                            {estimatedHb.toFixed(1)}
-                        </motion.span>
-                        <span className="text-xs text-muted-foreground uppercase tracking-wider">Hb g/dL</span>
-                    </div>
-                </div>
-
-                <div className="text-center space-y-2">
-                    <motion.div
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 1 }}
-                        className={cn("text-3xl font-bold uppercase", colorClass)}
-                    >
-                        {severity}
-                    </motion.div>
-                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                        <Activity className="h-4 w-4" />
-                        <span>Confidence: {percentage}%</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Based on palpebral conjunctiva analysis.
-                    </p>
-                </div>
+        {/* Header Section */}
+        <motion.div variants={itemVariants} className="flex items-center justify-between">
+            <div>
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                    Analysis Report
+                </h2>
+                <p className="text-slate-500 text-sm">Patient: {name}</p>
             </div>
+            <div className={cn("px-3 py-1 rounded-full text-xs font-medium border", config.bg, config.color, config.border)}>
+                {new Date().toLocaleDateString()}
+            </div>
+        </motion.div>
 
-            {/* Heatmap Overlay / Image Display */}
-            <div className="relative w-full h-32 rounded-lg overflow-hidden bg-black/50 mt-4 group">
-                {image ? (
-                   // eslint-disable-next-line @next/next/no-img-element
-                   <img src={image} alt="Scan" className="w-full h-full object-cover opacity-80 group-hover:opacity-40 transition-opacity" />
+        {/* Main Result Card */}
+        <motion.div variants={itemVariants}>
+            <Card className="overflow-hidden border-none shadow-lg ring-1 ring-slate-900/5">
+                <div className={cn("h-2 w-full bg-gradient-to-r", config.gradient)} />
+                <CardContent className="p-8">
+                    <div className="flex flex-col items-center">
+                        
+                        {/* Gauge Component */}
+                        <div className="relative w-56 h-56 mb-6">
+                            <svg className="w-full h-full transform -rotate-90">
+                                {/* Track */}
+                                <circle
+                                    cx="112"
+                                    cy="112"
+                                    r="100"
+                                    stroke="currentColor"
+                                    strokeWidth="16"
+                                    fill="transparent"
+                                    className="text-slate-100"
+                                />
+                                {/* Progress */}
+                                <motion.circle
+                                    cx="112"
+                                    cy="112"
+                                    r="100"
+                                    stroke="currentColor"
+                                    strokeWidth="16"
+                                    fill="transparent"
+                                    strokeLinecap="round"
+                                    className={config.fill}
+                                    initial={{ strokeDasharray: "0 628" }} // 2 * PI * 100
+                                    animate={{ strokeDasharray: `${percentage * 6.28} 628` }}
+                                    transition={{ duration: 1.5, ease: "easeOut", delay: 0.2 }}
+                                />
+                            </svg>
+                            
+                            {/* Center Data */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <motion.div 
+                                    initial={{ scale: 0.5, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ delay: 0.5, type: "spring" }}
+                                    className="text-center"
+                                >
+                                    <span className="text-5xl font-bold tracking-tighter text-slate-900">
+                                        {estimatedHb.toFixed(1)}
+                                    </span>
+                                    <span className="block text-xs font-medium text-slate-400 uppercase mt-1">
+                                        Hb g/dL
+                                    </span>
+                                </motion.div>
+                            </div>
+                        </div>
+
+                        {/* Text Result */}
+                        <div className="text-center space-y-2">
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <StatusIcon className={cn("w-6 h-6", config.color)} />
+                                <h3 className={cn("text-2xl font-bold", config.color)}>
+                                    {severity} Anemia
+                                </h3>
+                            </div>
+                            <p className="text-slate-600 font-medium">
+                                {config.message}
+                            </p>
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-medium mt-4">
+                                <Activity className="w-3 h-3" />
+                                AI Confidence: {percentage}%
+                            </div>
+                        </div>
+
+                    </div>
+                </CardContent>
+            </Card>
+        </motion.div>
+
+        {/* Details & Visualization Grid */}
+        <motion.div variants={itemVariants} className="grid grid-cols-1 gap-4">
+            {/* Heatmap Visualization Card */}
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                        <AlertOctagon className="w-4 h-4 text-slate-400" />
+                        Region of Interest
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="relative h-32 w-full bg-slate-900">
+                        <div className="absolute inset-0 flex items-center justify-center z-10">
+                           <p className="text-xs text-slate-400 font-mono border border-slate-700 px-2 py-1 rounded bg-black/40 backdrop-blur-sm">
+                                GRAD-CAM OVERLAY
+                           </p>
+                        </div>
+                        {/* Simulated organic heatmap effect */}
+                        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_50%_50%,_rgba(255,0,0,0.5),_transparent_70%)] mix-blend-screen animate-pulse" />
+                        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay" />
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Reference Range Card */}
+            <Card className="border-slate-200 shadow-sm">
+                <CardContent className="pt-6">
+                    <div className="space-y-4">
+                        <div className="flex justify-between text-xs text-slate-500 mb-1">
+                            <span>Low (&lt;12)</span>
+                            <span>Normal (12-16)</span>
+                            <span>High (&gt;16)</span>
+                        </div>
+                        <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden relative">
+                            {/* Gradient background representing ranges */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-rose-300 via-emerald-300 to-rose-300 opacity-30" />
+                            
+                            {/* Indicator Marker */}
+                            <motion.div 
+                                className="absolute top-0 bottom-0 w-1 bg-slate-900 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.3)]"
+                                initial={{ left: "0%" }}
+                                animate={{ 
+                                    // Simple normalization: assuming 0-20 scale for visualization
+                                    left: `${Math.min(Math.max((estimatedHb / 20) * 100, 0), 100)}%` 
+                                }}
+                                transition={{ delay: 1, duration: 1 }}
+                            />
+                        </div>
+                        <p className="text-xs text-slate-500 text-center pt-1">
+                            Your level is <strong>{estimatedHb}</strong> g/dL
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+        </motion.div>
+
+        {/* Action Buttons */}
+        <motion.div variants={itemVariants} className="pt-4 flex gap-3">
+            <Button
+                variant="outline"
+                onClick={() => router.push("/")}
+                className="flex-1 h-12 text-base rounded-xl border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+            >
+                <RotateCcw className="mr-2 h-4 w-4" /> 
+                Retest
+            </Button>
+            <Button
+                onClick={handleShare}
+                className="flex-1 h-12 text-base rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-lg shadow-slate-900/20"
+            >
+                {copied ? (
+                    <>
+                        <CheckCircle2 className="mr-2 h-4 w-4" /> Copied
+                    </>
                 ) : (
-                   <div className="absolute inset-0 flex items-center justify-center text-xs text-white/70">
-                      [ No Image Captured ]
-                   </div>
+                    <>
+                        <Share2 className="mr-2 h-4 w-4" /> Share Report
+                    </>
                 )}
+            </Button>
+        </motion.div>
 
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                   <span className="text-xs text-white font-bold drop-shadow-md">Captured Frame</span>
-                </div>
-
-                {/* Simulated Heatmap Gradient Overlay */}
-                <div className={cn("absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-transparent to-red-500/20 mix-blend-overlay pointer-events-none", bgClass === "bg-green-500" ? "opacity-0" : "opacity-50")} />
-            </div>
-
-             <div className="flex gap-4 pt-4">
-                <Button
-                    variant="outline"
-                    onClick={() => router.push("/scan")}
-                    className="flex-1 h-12 rounded-xl"
-                >
-                    <RotateCcw className="mr-2 h-4 w-4" /> Rescan
-                </Button>
-                <Button
-                    className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground"
-                >
-                    <Share2 className="mr-2 h-4 w-4" /> Share
-                </Button>
-            </div>
-        </div>
-
-        <div className="text-center text-xs text-muted-foreground px-8">
-            Disclaimer: This is an AI-assisted screening tool and not a medical diagnosis. Please consult a doctor for professional advice.
-        </div>
+        <motion.p variants={itemVariants} className="text-center text-[10px] text-slate-400 px-8 leading-relaxed">
+            Disclaimer: This AI screening tool analyzes palpebral conjunctiva pallor. 
+            Results are estimates and <strong>do not constitute a medical diagnosis</strong>. 
+            Please consult a qualified healthcare professional for blood tests.
+        </motion.p>
       </motion.div>
     </main>
   );
