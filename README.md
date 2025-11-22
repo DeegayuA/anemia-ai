@@ -100,3 +100,5 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 5. Rahman A, et al. (2020). Transfer learning for smartphone-based Anaemia detection from eye images. *IEEE Access*.
 6. Kwarteng A, et al. (2023). CP-AnemiC: Conjunctival Pallor Image Dataset for Anaemia Detection in Children. *Data in Brief*.
 7. Gal Y, Ghahramani Z. (2016). Dropout as a Bayesian approximation. *ICML*.
+
+
